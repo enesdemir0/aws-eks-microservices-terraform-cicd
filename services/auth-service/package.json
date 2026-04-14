@@ -6,6 +6,14 @@
   "directories": {
     "test": "tests"
   },
+  "imports": {
+    "#config/*": "./src/config/*.js",
+    "#controllers/*": "./src/controllers/*.js",
+    "#services/*": "./src/services/*.js",
+    "#utils/*": "./src/utils/*.js",
+    "#middleware/*": "./src/middleware/*.js",
+    "#validations/*": "./src/validations/*.js"
+  },
   "scripts": {
     "start": "node src/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"

@@ -1,5 +1,6 @@
 import express from 'express';
-import logger from './config/logger.js'; // Note: In ESM, you must include the .js extension!
+// OLD: import logger from './config/logger.js';
+import logger from '#config/logger';
 
 const app = express();
 
