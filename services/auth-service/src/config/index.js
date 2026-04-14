@@ -1,9 +1,10 @@
-const dotenv = require('dotenv');
+import dotenv from 'dotenv';
 dotenv.config();
 
-module.exports = {
+const config = {
   port: process.env.PORT || 3000,
   jwtSecret: process.env.JWT_SECRET,
   nodeEnv: process.env.NODE_ENV || 'development',
-  // We will add database and arcjet config here later
 };
+
+export default config;
