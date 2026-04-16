@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # This starts a real Postgres DB inside the GitHub Runner!
-  # 1. The Database Service
+    # 1. The Database Service
     services:
       postgres:
         image: postgres:15-alpine
