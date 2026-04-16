@@ -10,13 +10,16 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # This starts a real Postgres DB inside the GitHub Runner!
-    # 1. The Database Service
+    # This is the MAGIC line you were missing!
+    defaults:
+      run:
+        working-directory: services/auth-service
+
     services:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_USER: postgres        # Use 'postgres' to match standard
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
           POSTGRES_DB: auth_db
         ports:
@@ -39,15 +42,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 2. Initialize Database (Notice the -U postgres)
       - name: Initialize Database
+        # Note: we use ../../ to find the SQL file because we are inside services/auth-service
         run: |
           sudo apt-get install -y postgresql-client
           psql -h localhost -U postgres -d auth_db -f ../../infra/local/init-db/init.sql
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
 
-      # 3. Run Tests (Notice the postgres user in the URL)
       - name: Run Tests
         run: npm test
         env:
