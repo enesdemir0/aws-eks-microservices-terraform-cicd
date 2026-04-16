@@ -12,8 +12,8 @@
     "#services/*": "./src/services/*.js",
     "#utils/*": "./src/utils/*.js",
     "#middleware/*": "./src/middleware/*.js",
-    "#validations/*": "./src/validations/*.js"
-,   "#routes/*": "./src/routes/*.js"
+    "#validations/*": "./src/validations/*.js",
+    "#routes/*": "./src/routes/*.js"
   },
   "scripts": {
     "start": "node src/server.js",

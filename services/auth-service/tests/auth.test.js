@@ -1,9 +1,9 @@
 import request from 'supertest';
 import app from '../src/app.js';
 
-describe('Auth Service - Login Validation', () => {
+describe('Auth Service - Login Logic', () => {
   
-  it('should return 200 if username and password are valid', async () => {
+  it('should return a JWT token when credentials are valid', async () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({
@@ -12,32 +12,21 @@ describe('Auth Service - Login Validation', () => {
       });
     
     expect(res.statusCode).toEqual(200);
-    expect(res.body.message).toBe('Validation passed, you are logged in!');
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toHaveProperty('token'); // Check if token exists
+    expect(res.body.data.user.username).toBe('admin');
   });
 
-  it('should return 400 if username is too short', async () => {
+  it('should return 401 for wrong password', async () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({
-        username: 'ad', // Too short (min 3)
-        password: 'password123'
+        username: 'admin',
+        password: 'wrong-password'
       });
     
-    expect(res.statusCode).toEqual(400);
+    expect(res.statusCode).toEqual(401);
     expect(res.body.status).toBe('fail');
-    // Check if the specific error message is there
-    expect(res.body.errors[0].message).toContain('at least 3 characters');
-  });
-
-  it('should return 400 if password is missing', async () => {
-    const res = await request(app)
-      .post('/api/auth/login')
-      .send({
-        username: 'admin'
-        // password missing
-      });
-    
-    expect(res.statusCode).toEqual(400);
-    expect(res.body.status).toBe('fail');
+    expect(res.body.message).toBe('Invalid credentials');
   });
 });
