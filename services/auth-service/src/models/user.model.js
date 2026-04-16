@@ -11,3 +11,9 @@ export const createUser = async (username, hashedPassword) => {
   const result = await pool.query(query, [username, hashedPassword]);
   return result.rows[0];
 };
+
+export const findUserById = async (id) => {
+  const query = 'SELECT id, username, created_at FROM users WHERE id = $1';
+  const result = await pool.query(query, [id]);
+  return result.rows[0];
+};
