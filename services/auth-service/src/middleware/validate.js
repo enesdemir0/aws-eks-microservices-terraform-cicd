@@ -3,11 +3,6 @@ import logger from '#config/logger';
 
 const validate = (schema) => (req, res, next) => {
   try {
-    // Debug: Let's see what is coming in
-    if (!req.body || Object.keys(req.body).length === 0) {
-      logger.warn('Incoming request has no body. Make sure Content-Type is application/json');
-    }
-
     schema.parse({
       body: req.body,
       query: req.query,

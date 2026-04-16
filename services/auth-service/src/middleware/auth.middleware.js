@@ -1,13 +1,15 @@
 import { verifyToken } from '#utils/jwt';
 import ApiError from '#utils/ApiError';
 import catchAsync from '#utils/catchAsync';
-import * as User from '../models/user.model.js';
+import * as User from '#models/user.model';
 
 export const protect = catchAsync(async (req, res, next) => {
   let token;
 
-  // 1. Check if token exists in headers
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  // Prefer HttpOnly cookie; fall back to Bearer header for API clients
+  if (req.cookies?.jwt) {
+    token = req.cookies.jwt;
+  } else if (req.headers.authorization?.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
 
@@ -15,16 +17,18 @@ export const protect = catchAsync(async (req, res, next) => {
     throw new ApiError(401, 'You are not logged in. Please log in to get access.');
   }
 
-  // 2. Verify token
-  const decoded = verifyToken(token);
+  let decoded;
+  try {
+    decoded = verifyToken(token);
+  } catch {
+    throw new ApiError(401, 'Invalid token.');
+  }
 
-  // 3. Check if user still exists in DB
-  const currentUser = await User.findUserById(decoded.id); // We need to add this to model!
+  const currentUser = await User.findUserById(decoded.id);
   if (!currentUser) {
     throw new ApiError(401, 'The user belonging to this token no longer exists.');
   }
 
-  // 4. Grant access to protected route
   req.user = currentUser;
   next();
 });

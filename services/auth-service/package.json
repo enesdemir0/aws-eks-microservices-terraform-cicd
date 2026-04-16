@@ -10,6 +10,7 @@
     "#config/*": "./src/config/*.js",
     "#controllers/*": "./src/controllers/*.js",
     "#services/*": "./src/services/*.js",
+    "#models/*": "./src/models/*.js",
     "#utils/*": "./src/utils/*.js",
     "#middleware/*": "./src/middleware/*.js",
     "#validations/*": "./src/validations/*.js",

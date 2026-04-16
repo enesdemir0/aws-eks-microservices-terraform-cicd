@@ -1,12 +1,9 @@
 import { comparePassword, hashPassword } from '#utils/password';
 import { generateToken } from '#utils/jwt';
-import * as User from '../models/user.model.js';
+import * as User from '#models/user.model';
 import ApiError from '#utils/ApiError';
 import logger from '#config/logger';
 
-/**
- * Register a new user
- */
 export const registerUser = async (username, password) => {
   // 1. Check if username is already taken
   const existingUser = await User.findUserByUsername(username);
@@ -36,9 +33,6 @@ export const registerUser = async (username, password) => {
   };
 };
 
-/**
- * Login existing user
- */
 export const loginUser = async (username, password) => {
   const user = await User.findUserByUsername(username);
 
