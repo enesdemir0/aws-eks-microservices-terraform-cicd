@@ -1,0 +1,41 @@
+services:
+  # --- THE INFRASTRUCTURE ---
+  # Note: We use the same name 'main-db' so it matches your infra folder
+  main-db:
+    image: postgres:15-alpine
+    container_name: main-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-superpassword}
+      POSTGRES_DB: ${DB_NAME:-auth_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/local/init-db:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+
+  # --- THE AUTH SERVICE ---
+  auth-service:
+    build:
+      context: ./services/auth-service
+    container_name: auth-app
+    depends_on:
+      - main-db
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-superpassword}@main-db:5432/${DB_NAME:-auth_db}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-123}
+      NODE_ENV: development
+      ARCJET_ENV: development
+    ports:
+      - "3000:3000"
+    networks:
+      - microservices-network
+
+networks:
+  microservices-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
