@@ -48,7 +48,7 @@ describe('Auth Service - Login Logic', () => {
       });
     
     expect(res.statusCode).toEqual(401);
-    expect(res.body.status).toBe('fail');
-    expect(res.body.message).toBe('Invalid credentials');
+    expect(res.body.status).toBe('fail'); // Ensure this matches error.middleware.js
+    expect(res.body.message).toBe('Invalid credentials'); // Ensure this matches
   });
 });
