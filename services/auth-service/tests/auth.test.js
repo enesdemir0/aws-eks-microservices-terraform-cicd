@@ -51,4 +51,31 @@ describe('Auth Service - Login Logic', () => {
     expect(res.body.status).toBe('fail'); // Ensure this matches error.middleware.js
     expect(res.body.message).toBe('Invalid credentials'); // Ensure this matches
   });
+
+  it('should register a new user successfully', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'newuser',
+        password: 'password123'
+      });
+    
+    expect(res.statusCode).toEqual(201);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toHaveProperty('token');
+    expect(res.body.data.user.username).toBe('newuser');
+  });
+
+  it('should return 400 if registering a username that already exists', async () => {
+    // We know 'admin' is already created in the 'beforeAll' block
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'admin',
+        password: 'password123'
+      });
+    
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.message).toBe('Username already taken');
+  });
 });

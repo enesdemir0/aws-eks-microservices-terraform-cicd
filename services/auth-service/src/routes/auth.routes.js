@@ -1,11 +1,12 @@
 import express from 'express';
-import { login } from '#controllers/auth.controller';
+import * as authController from '#controllers/auth.controller';
 import validate from '#middleware/validate';
-import { loginSchema } from '#validations/auth.validation';
+import { loginSchema, registerSchema } from '#validations/auth.validation';
 
 const router = express.Router();
 
-// Here is the magic: First we validate, then we log in
-router.post('/login', validate(loginSchema), login);
+// Public Routes
+router.post('/register', validate(registerSchema), authController.register);
+router.post('/login', validate(loginSchema), authController.login);
 
 export default router;
