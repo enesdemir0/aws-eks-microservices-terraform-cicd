@@ -1,6 +1,5 @@
 services:
   # --- THE INFRASTRUCTURE ---
-  # Note: We use the same name 'main-db' so it matches your infra folder
   main-db:
     image: postgres:15-alpine
     container_name: main-postgres
@@ -30,6 +29,16 @@ services:
        ARCJET_ENV: ${ARCJET_ENV} 
     ports:
       - "3000:3000"
+    networks:
+      - microservices-network
+
+  # --- THE TASK QUEUE (REDIS) ---
+  # Note: This must be at the same level as auth-service!
+  task-queue:
+    image: redis:7-alpine
+    container_name: redis-queue
+    ports:
+      - "6379:6379"
     networks:
       - microservices-network
 

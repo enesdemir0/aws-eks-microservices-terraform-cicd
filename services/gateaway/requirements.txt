@@ -1,8 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
-python-dotenv
-requests
-pytest
 httpx
 pydantic-settings
+redis[asyncio]
+aiofiles
+pytest
+pytest-asyncio
