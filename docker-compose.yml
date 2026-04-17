@@ -24,10 +24,10 @@ services:
     depends_on:
       - main-db
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-superpassword}@main-db:5432/${DB_NAME:-auth_db}
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-123}
-      NODE_ENV: development
-      ARCJET_ENV: development
+       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@main-db:5432/${DB_NAME}
+       JWT_SECRET: ${JWT_SECRET}
+       NODE_ENV: ${NODE_ENV}
+       ARCJET_ENV: ${ARCJET_ENV} 
     ports:
       - "3000:3000"
     networks:

@@ -8,7 +8,7 @@ __pycache__/
 *.py[cod]
 venv/
 .venv/
-
+.vscode/
 # Terraform (for later)
 .terraform/
 *.tfstate
