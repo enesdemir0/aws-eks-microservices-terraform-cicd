@@ -1,5 +1,5 @@
 services:
-  # --- THE INFRASTRUCTURE ---
+  # --- DATABASE (PostgreSQL) ---
   main-db:
     image: postgres:15-alpine
     container_name: main-postgres
@@ -15,30 +15,58 @@ services:
     networks:
       - microservices-network
 
-  # --- THE AUTH SERVICE ---
-  auth-service:
-    build:
-      context: ./services/auth-service
-    container_name: auth-app
-    depends_on:
-      - main-db
-    environment:
-       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@main-db:5432/${DB_NAME}
-       JWT_SECRET: ${JWT_SECRET}
-       NODE_ENV: ${NODE_ENV}
-       ARCJET_ENV: ${ARCJET_ENV} 
-    ports:
-      - "3000:3000"
-    networks:
-      - microservices-network
-
-  # --- THE TASK QUEUE (REDIS) ---
-  # Note: This must be at the same level as auth-service!
+  # --- CACHE & QUEUE (Redis) ---
   task-queue:
     image: redis:7-alpine
     container_name: redis-queue
     ports:
       - "6379:6379"
+    networks:
+      - microservices-network
+
+  # --- AUTH SERVICE (Node.js) ---
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-app
+    depends_on:
+      - main-db
+    environment:
+      # We use the service name 'main-db' to talk to Postgres inside Docker
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-superpassword}@main-db:5432/${DB_NAME:-auth_db}
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: ${NODE_ENV:-development}
+      ARCJET_ENV: ${ARCJET_ENV:-development}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    networks:
+      - microservices-network
+
+  # --- GATEWAY SERVICE (FastAPI) ---
+  gateway-service:
+    build:
+      context: ./services/gateaway
+      dockerfile: Dockerfile
+    container_name: gateway-app
+    depends_on:
+      - auth-service
+      - task-queue
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      # Use service names 'auth-service' and 'task-queue' for internal DNS
+      AUTH_SERVICE_URL: http://auth-service:3000
+      REDIS_URL: redis://task-queue:6379/0
+      REDIS_QUEUE_NAME: image_tasks
+      UPLOAD_DIR: /app/uploads
+      STORAGE_TYPE: local
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      # Maps local uploads folder so you can see files on your Windows machine
+      - ./services/gateaway/uploads:/app/uploads
     networks:
       - microservices-network
 
