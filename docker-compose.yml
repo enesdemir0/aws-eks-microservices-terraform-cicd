@@ -1,5 +1,5 @@
 services:
-  # --- DATABASE (PostgreSQL) ---
+  # 1. Auth Database
   main-db:
     image: postgres:15-alpine
     container_name: main-postgres
@@ -15,7 +15,22 @@ services:
     networks:
       - microservices-network
 
-  # --- CACHE & QUEUE (Redis) ---
+  # 2. Metadata Database (Port 5433)
+  metadata-db:
+    image: postgres:15-alpine
+    container_name: metadata-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-superpassword}
+      POSTGRES_DB: metadata_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - metadata_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+
+  # 3. Redis Queue
   task-queue:
     image: redis:7-alpine
     container_name: redis-queue
@@ -24,7 +39,7 @@ services:
     networks:
       - microservices-network
 
-  # --- AUTH SERVICE (Node.js) ---
+  # 4. Auth Service (Node.js)
   auth-service:
     build:
       context: ./services/auth-service
@@ -35,13 +50,12 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-superpassword}@main-db:5432/${DB_NAME:-auth_db}
       JWT_SECRET: ${JWT_SECRET}
       NODE_ENV: ${NODE_ENV:-development}
-      PORT: 3000
     ports:
       - "3000:3000"
     networks:
       - microservices-network
 
-  # --- GATEWAY SERVICE (FastAPI) ---
+  # 5. Gateway Service (FastAPI)
   gateway-service:
     build:
       context: ./services/gateaway
@@ -59,23 +73,39 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # This folder is shared with the AI Worker
       - ./services/gateaway/uploads:/app/uploads
     networks:
       - microservices-network
 
-  # --- AI WORKER SERVICE (Python/TensorFlow) ---
+  # 6. Metadata API Service (NEW - The Librarian)
+  metadata-api:
+    build:
+      context: ./services/metadata-api
+    container_name: metadata-app
+    depends_on:
+      - metadata-db
+    environment:
+      # It talks to its OWN database
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-superpassword}@metadata-db:5432/metadata_db
+    ports:
+      - "8001:8001"
+    networks:
+      - microservices-network
+
+  # 7. AI Worker Service
   ai-worker:
     build:
       context: ./services/ai-worker
     container_name: ai-worker
     depends_on:
       - task-queue
+      - metadata-api # It needs the Librarian to be ready
     environment:
       REDIS_URL: redis://task-queue:6379/0
       TASK_QUEUE: image_tasks
+      # NEW: The worker needs to know where to send the results!
+      METADATA_API_URL: http://metadata-api:8001/api/metadata/save
     volumes:
-      # CRITICAL: The worker reads from the same physical folder as the Gateway
       - ./services/gateaway/uploads:/app/uploads
     networks:
       - microservices-network
@@ -86,3 +116,4 @@ networks:
 
 volumes:
   postgres_data:
+  metadata_db_data:
