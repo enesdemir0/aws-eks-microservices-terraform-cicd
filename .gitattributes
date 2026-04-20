@@ -1,1 +1,11 @@
-services/ai-worker/saved_captioner/variables/* filter=lfs diff=lfs merge=lfs -text
+# Tell GitHub that these files are not "Logic" and should be ignored in stats
+services/auth-service/package-lock.json linguist-generated
+services/gateway/requirements.txt linguist-generated
+services/ai-worker/requirements.txt linguist-generated
+
+# If you have large weights or JSON files, ignore them too
+*.json linguist-detectable=false
+*.h5 linguist-detectable=false
+
+# Ensure Python files are prioritized
+*.py linguist-detectable=true
