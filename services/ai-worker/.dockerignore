@@ -3,7 +3,4 @@ __pycache__
 venv
 .env
 .git
-.vscode
-uploads
-
-
+test_inference.py

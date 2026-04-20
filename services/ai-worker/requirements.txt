@@ -1,0 +1,14 @@
+# --- System Core ---
+tensorflow-cpu==2.15.0
+redis
+pydantic-settings
+pillow
+
+# --- Your ML Logic Dependencies ---
+numpy<2.0.0
+opencv-python-headless
+nltk
+pyyaml
+h5py
+rouge-score
+pandas
