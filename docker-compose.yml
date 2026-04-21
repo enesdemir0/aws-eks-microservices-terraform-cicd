@@ -110,6 +110,24 @@ services:
     networks:
       - microservices-network
 
+  # 8. Frontend (Next.js)
+  frontend:
+    build:
+      context: ./services/frontend
+    container_name: frontend-app
+    depends_on:
+      - auth-service
+      - gateway-service
+      - metadata-api
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:3000
+      GATEWAY_SERVICE_URL: http://gateway-service:8000
+      METADATA_API_URL: http://metadata-api:8001
+    ports:
+      - "3001:3001"
+    networks:
+      - microservices-network
+
 networks:
   microservices-network:
     driver: bridge

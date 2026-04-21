@@ -7,3 +7,4 @@ redis[asyncio]
 aiofiles
 pytest
 pytest-asyncio
+httpx

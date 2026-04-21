@@ -1,0 +1,42 @@
+# Base configuration — values shared across ALL environments.
+# Override specific keys in local.yml or eks-*.yml.
+# Do NOT put secrets here. Use environment-specific files or a secrets manager.
+
+project:
+  name: visionmetric
+  version: "1.0.0"
+
+services:
+  auth:
+    port: 3000
+    jwt_expiry_seconds: 3600
+
+  gateway:
+    port: 8000
+    max_file_size_mb: 10
+    allowed_extensions: "jpg,jpeg,png,webp"
+    upload_dir: /app/uploads
+    auth_service_timeout: 5.0
+
+  metadata_api:
+    port: 8001
+
+  ai_worker:
+    task_queue: image_tasks
+    model_dir: saved_captioner
+    retry_delay_seconds: 2
+
+  frontend:
+    port: 3001
+
+  redis:
+    queue_name: image_tasks
+    db: 0
+
+databases:
+  auth_db:
+    name: auth_db
+    port: 5432
+  metadata_db:
+    name: metadata_db
+    port: 5433

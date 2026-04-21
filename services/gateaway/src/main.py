@@ -1,9 +1,11 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.config.settings import settings
 from src.middleware.logging import RequestLoggingMiddleware
@@ -18,6 +20,7 @@ async def lifespan(app: FastAPI):
     setup_logging(settings.LOG_LEVEL)
     logger.info("Gateway starting", extra={"env": settings.NODE_ENV})
 
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     app.state.redis = aioredis.from_url(
         settings.REDIS_URL, encoding="utf-8", decode_responses=True
     )
@@ -35,6 +38,9 @@ app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(health.router)
 app.include_router(upload.router)
+
+# Serve uploaded images — required by the frontend image proxy
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR, check_dir=False), name="uploads")
 
 
 @app.exception_handler(HTTPException)

@@ -1,0 +1,33 @@
+# AWS EKS production configuration.
+# Secrets are injected by Kubernetes Secrets / AWS Secrets Manager — never hardcoded here.
+# Service discovery uses Kubernetes internal DNS: <service>.<namespace>.svc.cluster.local
+
+environment: eks
+
+service_urls:
+  auth_service: "http://auth-service.visionmetric.svc.cluster.local:3000"
+  gateway_service: "http://gateway-service.visionmetric.svc.cluster.local:8000"
+  metadata_api: "http://metadata-api.visionmetric.svc.cluster.local:8001"
+  # Redis via AWS ElastiCache (URL from Kubernetes Secret)
+  redis: "${REDIS_URL}"
+  frontend: "https://app.visionmetric.example.com"
+
+databases:
+  # Both databases point to RDS instances (URL from Kubernetes Secret)
+  auth_db:
+    host: "${AUTH_DB_HOST}"
+  metadata_db:
+    host: "${METADATA_DB_HOST}"
+
+node_env: production
+log_level: WARNING
+
+# EKS-specific settings
+aws:
+  region: us-east-1
+  s3_bucket: "${S3_UPLOADS_BUCKET}"
+  ecr_registry: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+
+# Storage switches from local volume to S3 in EKS
+gateway:
+  storage_type: s3

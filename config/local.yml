@@ -1,0 +1,27 @@
+# Local Docker Compose overrides.
+# Run: python config/generate-env.py local > .env
+# Then: docker compose up --build
+
+environment: local
+
+service_urls:
+  auth_service: "http://auth-service:3000"
+  gateway_service: "http://gateway-service:8000"
+  metadata_api: "http://metadata-api:8001"
+  redis: "redis://task-queue:6379/0"
+  frontend: "http://localhost:3001"
+
+databases:
+  auth_db:
+    host: main-db
+  metadata_db:
+    host: metadata-db
+
+secrets:
+  # For local dev only — override via shell export or .env
+  db_user: postgres
+  db_password: super-secure-local-password-123
+  jwt_secret: local-dev-jwt-secret-change-in-production
+
+node_env: development
+log_level: INFO

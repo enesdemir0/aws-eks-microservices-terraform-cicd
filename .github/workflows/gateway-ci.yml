@@ -1,20 +1,22 @@
-name: Metadata API CI
+name: Gateway CI
 
 on:
   push:
-    branches: [main, master, "feature/**"]
+    branches: [main, "feature/**"]
     paths:
-      - "services/metadata-api/**"
+      - "services/gateaway/**"
   pull_request:
-    branches: [main, master]
+    branches: [main]
+    paths:
+      - "services/gateaway/**"
 
 defaults:
   run:
-    working-directory: services/metadata-api
+    working-directory: services/gateaway
 
 jobs:
   test:
-    name: Pytest (SQLite in-memory)
+    name: Pytest (fully mocked)
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +26,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-          cache-dependency-path: services/metadata-api/requirements.txt
+          cache-dependency-path: services/gateaway/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -34,4 +36,6 @@ jobs:
       - name: Run tests
         run: pytest tests/ -v --tb=short
         env:
-          DATABASE_URL: sqlite:///./test_ci.db
+          AUTH_SERVICE_URL: http://localhost:3000
+          REDIS_URL: redis://localhost:6379/0
+          UPLOAD_DIR: /tmp/test-uploads
