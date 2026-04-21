@@ -1,0 +1,44 @@
+name: K8s Infrastructure Validation
+
+on:
+  push:
+    branches: [ "feature/k8s-*" ] # Run on any k8s feature branch
+
+jobs:
+  validate-cluster:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Start the Cluster
+      - name: Create Kind Cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: validation-cluster
+
+      # 2. Build and "Inject" your custom image
+      - name: Build and Load Auth Image
+        run: |
+          docker build -t auth-service:latest ./services/auth-service
+          kind load docker-image auth-service:latest --name validation-cluster
+
+      # 3. Apply the "Instruction Sheets" (YAMLs)
+      # This is the answer to your question!
+      - name: Apply Auth Manifests
+        run: |
+          # We tell the Robot: "Look in the k8s/auth folder and do everything it says"
+          kubectl apply -f k8s/auth/
+
+      # 4. Verification (The "Wait" step)
+      - name: Wait for Pods
+        run: |
+          # We wait to see if the Database and the API actually start
+          kubectl wait --for=condition=ready pod -l app=auth-service --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=auth-db --timeout=120s
+
+      # 5. Final Check
+      - name: Show Pods and Logs if fail
+        if: always() # Run this even if tests fail so we can debug!
+        run: |
+          kubectl get pods
+          kubectl get services

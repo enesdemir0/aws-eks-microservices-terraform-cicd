@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+data:
+  DB_USER: "postgres"
+  DB_NAME: "auth_db"
+  NODE_ENV: "development"
+  PORT: "3000"
+  # In K8s, the "Host" is the name of the Service we will create for the DB
+  DB_HOST: "auth-db-service"
