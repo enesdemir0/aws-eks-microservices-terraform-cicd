@@ -1,6 +1,25 @@
-containers:
+apiVersion: apps/v1  # <--- MISSING
+kind: Deployment     # <--- MISSING
+metadata:
+  name: auth-deployment
+  labels:
+    app: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
       - name: auth-api
         image: auth-service:latest
+        imagePullPolicy: IfNotPresent # <--- Crucial for local Kind testing
+        ports:
+        - containerPort: 3000
         env:
         # 1. Get non-secrets from ConfigMap
         - name: DB_USER
@@ -18,7 +37,17 @@ containers:
             configMapKeyRef:
               name: auth-config
               key: DB_HOST
-        
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: PORT
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: NODE_ENV
+
         # 2. Get secrets from Secret
         - name: DB_PASSWORD
           valueFrom:
@@ -31,7 +60,7 @@ containers:
               name: auth-secrets
               key: JWT_SECRET
 
-        # 3. Construct the DATABASE_URL (The "Master" Pipe)
-        # Kubernetes will replace these $(VAR) with the values above!
+        # 3. Construct the DATABASE_URL
+        # We use the variables defined ABOVE to build the final pipe
         - name: DATABASE_URL
           value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
