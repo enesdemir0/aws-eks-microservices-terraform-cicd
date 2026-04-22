@@ -18,45 +18,32 @@ jobs:
         with:
           cluster_name: validation-cluster
 
-      # 2. Build and Load ready images
-      - name: Build and Load API Images
+          
+      - name: Build and Load Images
         run: |
-          # Build Auth
           docker build -t auth-service:latest ./services/auth-service
-          kind load docker-image auth-service:latest --name validation-cluster
-          
-          # Build Gateway
           docker build -t gateway-service:latest ./services/gateaway
+          docker build -t metadata-api:latest ./services/metadata-api   # Add this
+          docker build -t frontend:latest ./services/frontend           # Add this
+          
+          kind load docker-image auth-service:latest --name validation-cluster
           kind load docker-image gateway-service:latest --name validation-cluster
+          kind load docker-image metadata-api:latest --name validation-cluster  # Add this
+          kind load docker-image frontend:latest --name validation-cluster      # Add this
 
-      # 3. Apply Manifests in logical order
-      - name: Apply K8s Manifests
+      - name: Apply All Manifests
         run: |
-          # A. Shared infra first
           kubectl apply -f k8s/shared/
-          
-          # B. Auth system
           kubectl apply -f k8s/auth/
-          
-          # C. Gateway
           kubectl apply -f k8s/gateway/
-          
-          # D. AI Worker (Pulling from Docker Hub)
           kubectl apply -f k8s/ai-worker/
+          kubectl apply -f k8s/metadata-api/ # Add this
+          kubectl apply -f k8s/frontend/     # Add this
 
-      # 4. Verification
-      - name: Wait for Pods to be Ready
+      - name: Wait for Pods
         run: |
           kubectl wait --for=condition=ready pod -l app=auth-service --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=auth-db --timeout=120s
           kubectl wait --for=condition=ready pod -l app=gateway-service --timeout=120s
-          # Wait for the worker (pulled from Docker Hub)
+          kubectl wait --for=condition=ready pod -l app=metadata-api --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
           kubectl wait --for=condition=ready pod -l app=ai-worker --timeout=300s
-
-      # 5. Diagnostic
-      - name: Cluster Status
-        if: always()
-        run: |
-          kubectl get pods
-          kubectl get services
-          kubectl get pvc
