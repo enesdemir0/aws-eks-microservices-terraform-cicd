@@ -18,46 +18,45 @@ jobs:
         with:
           cluster_name: validation-cluster
 
-      # 2. Build and "Inject" custom images
-      - name: Build and Load Images
+      # 2. Build and Load ready images
+      - name: Build and Load API Images
         run: |
-          # Build Auth Service
+          # Build Auth
           docker build -t auth-service:latest ./services/auth-service
           kind load docker-image auth-service:latest --name validation-cluster
           
-          # Build Gateway Service
+          # Build Gateway
           docker build -t gateway-service:latest ./services/gateaway
           kind load docker-image gateway-service:latest --name validation-cluster
 
-      # 3. Apply Manifests in order
+      # 3. Apply Manifests in logical order
       - name: Apply K8s Manifests
         run: |
-          # First: Shared infrastructure (Storage/PVCs)
+          # A. Shared infra first
           kubectl apply -f k8s/shared/
           
-          # Second: Auth Service & DB
+          # B. Auth system
           kubectl apply -f k8s/auth/
           
-          # Third: Gateway Service
+          # C. Gateway
           kubectl apply -f k8s/gateway/
+          
+          # D. AI Worker (Pulling from Docker Hub)
+          kubectl apply -f k8s/ai-worker/
 
-      # 4. Verification (Wait for the Pods to be "Ready")
-      - name: Wait for Pods
+      # 4. Verification
+      - name: Wait for Pods to be Ready
         run: |
-          # Wait for Auth
           kubectl wait --for=condition=ready pod -l app=auth-service --timeout=120s
           kubectl wait --for=condition=ready pod -l app=auth-db --timeout=120s
-          
-          # Wait for Gateway
           kubectl wait --for=condition=ready pod -l app=gateway-service --timeout=120s
+          # Wait for the worker (pulled from Docker Hub)
+          kubectl wait --for=condition=ready pod -l app=ai-worker --timeout=300s
 
-      # 5. Debugging (Runs even if previous steps fail)
-      - name: Show Cluster Status on Failure
+      # 5. Diagnostic
+      - name: Cluster Status
         if: always()
         run: |
-          echo "--- PODS ---"
           kubectl get pods
-          echo "--- SERVICES ---"
           kubectl get services
-          echo "--- STORAGE ---"
           kubectl get pvc

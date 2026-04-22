@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-worker-config
+data:
+  REDIS_URL: "redis://redis-service:6379/0"
+  TASK_QUEUE: "image_tasks"
+  METADATA_API_URL: "http://metadata-api-service:8001/api/metadata/save"

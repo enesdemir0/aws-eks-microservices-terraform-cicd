@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-worker
+  template:
+    metadata:
+      labels:
+        app: ai-worker
+    spec:
+      containers:
+      - name: ai-brain
+        # CHANGE THIS to your Docker Hub image!
+        image: enesdemir09/vision-ai-worker:v1 
+        # We don't need 'Never' anymore, we want K8s to pull it
+        imagePullPolicy: Always 
+        envFrom:
+        - configMapRef:
+            name: ai-worker-config
+        volumeMounts:
+        - name: image-storage
+          mountPath: /app/uploads
+      volumes:
+      - name: image-storage
+        persistentVolumeClaim:
+          claimName: image-storage-pvc
