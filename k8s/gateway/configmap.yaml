@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  PORT: "8000"
+  NODE_ENV: "development"
+  # NOTICE: We use the names of the K8s Services we created!
+  AUTH_SERVICE_URL: "http://auth-service:3000"
+  REDIS_URL: "redis://redis-service:6379/0"
+  STORAGE_TYPE: "local"
+  UPLOAD_DIR: "/app/uploads"
