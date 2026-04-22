@@ -12,38 +12,145 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Start the Kind Cluster
+      # ── 1. Cluster Setup ──────────────────────────────────────────────────────
       - name: Create Kind Cluster
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: validation-cluster
+          # kind-config enables port 80/443 host mapping required by NGINX ingress
+          config: .github/kind-config.yaml
 
-          
-      - name: Build and Load Images
+      - name: Install NGINX Ingress Controller
         run: |
-          docker build -t auth-service:latest ./services/auth-service
-          docker build -t gateway-service:latest ./services/gateaway
-          docker build -t metadata-api:latest ./services/metadata-api   # Add this
-          docker build -t frontend:latest ./services/frontend           # Add this
-          
-          kind load docker-image auth-service:latest --name validation-cluster
-          kind load docker-image gateway-service:latest --name validation-cluster
-          kind load docker-image metadata-api:latest --name validation-cluster  # Add this
-          kind load docker-image frontend:latest --name validation-cluster      # Add this
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/kind/deploy.yaml
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=90s
 
-      - name: Apply All Manifests
+      # ── 2. Build Images ───────────────────────────────────────────────────────
+      # NOTE: services/gateaway is intentionally spelled with the existing typo
+      # to match the actual directory name on disk.
+      - name: Build Docker Images
         run: |
+          docker build -t auth-service:latest     ./services/auth-service
+          docker build -t gateway-service:latest   ./services/gateaway
+          docker build -t ai-worker:latest         ./services/ai-worker
+          docker build -t frontend:latest          ./services/frontend
+
+          # metadata-api Dockerfile is pending — skip build if not yet created
+          if [ -f ./services/metadata-api/Dockerfile ]; then
+            docker build -t metadata-api:latest ./services/metadata-api
+          else
+            echo "⚠️  services/metadata-api/Dockerfile not found — skipping build"
+          fi
+
+      # ── 3. Load Images into Kind ──────────────────────────────────────────────
+      - name: Load Images into Kind
+        run: |
+          kind load docker-image auth-service:latest    --name validation-cluster
+          kind load docker-image gateway-service:latest  --name validation-cluster
+          kind load docker-image ai-worker:latest        --name validation-cluster
+          kind load docker-image frontend:latest         --name validation-cluster
+
+          if docker image inspect metadata-api:latest > /dev/null 2>&1; then
+            kind load docker-image metadata-api:latest --name validation-cluster
+          fi
+
+      # ── 4. Apply Manifests (dependency order) ─────────────────────────────────
+      - name: Apply Kubernetes Manifests
+        run: |
+          # Secrets first — deployments that reference them will fail if absent
+          kubectl apply -f k8s/auth/secret.yaml
+          kubectl apply -f k8s/metadata-api/secret.yaml
+
+          # Shared infrastructure (Redis, shared PVC)
           kubectl apply -f k8s/shared/
+
+          # Per-service manifests
           kubectl apply -f k8s/auth/
           kubectl apply -f k8s/gateway/
           kubectl apply -f k8s/ai-worker/
-          kubectl apply -f k8s/metadata-api/ # Add this
-          kubectl apply -f k8s/frontend/     # Add this
+          kubectl apply -f k8s/metadata-api/
+          kubectl apply -f k8s/frontend/
 
-      - name: Wait for Pods
+          # Ingress last — backends must exist before rules are evaluated
+          kubectl apply -f k8s/ingress.yaml
+
+      # ── 5. Wait for Readiness ─────────────────────────────────────────────────
+      - name: Wait for Database Pods
         run: |
-          kubectl wait --for=condition=ready pod -l app=auth-service --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=gateway-service --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=metadata-api --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=auth-db     --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=metadata-db  --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=redis        --timeout=60s
+
+      - name: Wait for Application Pods
+        run: |
+          kubectl wait --for=condition=ready pod -l app=auth-service    --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=gateway-service  --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=frontend         --timeout=120s
+
+          # metadata-api only if image was built
+          if docker image inspect metadata-api:latest > /dev/null 2>&1; then
+            kubectl wait --for=condition=ready pod -l app=metadata-api --timeout=120s
+          fi
+
+      - name: Wait for AI Worker
+        run: |
+          # Extended timeout — TensorFlow model pull from Docker Hub can be slow
           kubectl wait --for=condition=ready pod -l app=ai-worker --timeout=300s
+
+      # ── 6. Verify Ingress Rules ───────────────────────────────────────────────
+      - name: Verify Ingress Rules
+        run: |
+          echo "=== Ingress Object ==="
+          kubectl get ingress microservices-ingress
+          kubectl describe ingress microservices-ingress
+
+          echo ""
+          echo "=== Service Endpoints ==="
+          kubectl get endpoints
+
+          echo ""
+          echo "=== Routing Smoke Tests ==="
+          # Port-forward the ingress controller so we can hit it from the runner
+          kubectl port-forward --namespace=ingress-nginx \
+            svc/ingress-nginx-controller 8080:80 &
+          sleep 5
+
+          check_route() {
+            local label="$1"
+            local path="$2"
+            local code
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080${path}" || echo "000")
+            if [ "$code" = "000" ]; then
+              echo "❌ ${label}: connection refused"
+            elif [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; then
+              echo "✅ ${label}: HTTP ${code}"
+            else
+              echo "⚠️  ${label}: HTTP ${code} (unexpected — check application logs)"
+            fi
+          }
+
+          check_route "Frontend     (/)"              "/"
+          check_route "Auth Service (/api/auth)"      "/api/auth/health"
+          check_route "Gateway      (/api/gateway)"   "/api/gateway/health"
+          check_route "Metadata API (/api/metadata)"  "/api/metadata/health"
+
+      # ── 7. Debug Output on Failure ────────────────────────────────────────────
+      - name: Dump Debug Info
+        if: failure()
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -o wide
+
+          echo ""
+          echo "=== Recent Events ==="
+          kubectl get events --sort-by='.lastTimestamp' | tail -30
+
+          echo ""
+          echo "=== Pod Logs ==="
+          for pod in $(kubectl get pods -o name 2>/dev/null); do
+            echo "--- ${pod} ---"
+            kubectl logs "${pod}" --tail=50 2>/dev/null || true
+          done

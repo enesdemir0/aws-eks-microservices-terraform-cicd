@@ -1,0 +1,59 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: microservices-ingress
+  annotations:
+    # Strip the /api/<service> prefix before forwarding to backend pods.
+    # Capture group $2 becomes the remainder (e.g. /api/auth/login → /login).
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Allow large file uploads through the gateway
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # EKS ALB compatibility (uncomment when deploying to EKS with AWS Load Balancer Controller)
+    # kubernetes.io/ingress.class: alb
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # --- API Routes (specific paths take precedence over the catch-all) ---
+
+      # Auth Service: /api/auth/login  →  auth-service:3000/login
+      - path: /api/auth(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: auth-service
+            port:
+              number: 3000
+
+      # Gateway Service: /api/gateway/upload  →  gateway-service:8000/upload
+      - path: /api/gateway(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: gateway-service
+            port:
+              number: 8000
+
+      # Metadata API: /api/metadata/save  →  metadata-api-service:8001/save
+      - path: /api/metadata(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: metadata-api-service
+            port:
+              number: 8001
+
+      # Catch-all: all remaining traffic goes to the Next.js frontend
+      - path: /()(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 3001

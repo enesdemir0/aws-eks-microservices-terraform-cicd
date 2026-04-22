@@ -1,5 +1,5 @@
-apiVersion: apps/v1  # <--- MISSING
-kind: Deployment     # <--- MISSING
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: auth-deployment
   labels:
@@ -17,11 +17,10 @@ spec:
       containers:
       - name: auth-api
         image: auth-service:latest
-        imagePullPolicy: IfNotPresent # <--- Crucial for local Kind testing
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
         env:
-        # 1. Get non-secrets from ConfigMap
         - name: DB_USER
           valueFrom:
             configMapKeyRef:
@@ -47,8 +46,6 @@ spec:
             configMapKeyRef:
               name: auth-config
               key: NODE_ENV
-
-        # 2. Get secrets from Secret
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -59,8 +56,26 @@ spec:
             secretKeyRef:
               name: auth-secrets
               key: JWT_SECRET
-
-        # 3. Construct the DATABASE_URL
-        # We use the variables defined ABOVE to build the final pipe
         - name: DATABASE_URL
           value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3

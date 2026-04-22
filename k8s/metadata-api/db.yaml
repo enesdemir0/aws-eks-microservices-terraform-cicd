@@ -3,10 +3,13 @@ kind: PersistentVolumeClaim
 metadata:
   name: metadata-db-pvc
 spec:
-  accessModes: [ReadWriteOnce]
+  accessModes:
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 5Gi
+  # For EKS with EBS: uncomment the line below (gp3 is preferred over gp2)
+  # storageClassName: gp3
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,14 +33,28 @@ spec:
           value: "postgres"
         - name: POSTGRES_DB
           value: "metadata_db"
+        # Uses its own dedicated Secret — isolated from auth-db credentials
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: auth-secrets # Reusing the same password secret for simplicity
+              name: metadata-secrets
               key: DB_PASSWORD
         volumeMounts:
         - name: storage
           mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 6
       volumes:
       - name: storage
         persistentVolumeClaim:
@@ -51,5 +68,5 @@ spec:
   selector:
     app: metadata-db
   ports:
-    - port: 5432 # Internal K8s port
+    - port: 5432
       targetPort: 5432

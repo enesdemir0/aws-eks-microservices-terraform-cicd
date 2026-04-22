@@ -14,16 +14,23 @@ spec:
     spec:
       containers:
       - name: ai-brain
-        # CHANGE THIS to your Docker Hub image!
-        image: enesdemir09/vision-ai-worker:v1 
-        # We don't need 'Never' anymore, we want K8s to pull it
-        imagePullPolicy: Always 
+        image: enesdemir09/vision-ai-worker:v1
+        imagePullPolicy: Always
         envFrom:
         - configMapRef:
             name: ai-worker-config
         volumeMounts:
         - name: image-storage
           mountPath: /app/uploads
+        resources:
+          # AI Worker gets the most resources — TensorFlow needs headroom.
+          # Limits prevent it from OOM-killing other pods on the same node.
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
       volumes:
       - name: image-storage
         persistentVolumeClaim:
