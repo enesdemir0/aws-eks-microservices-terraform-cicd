@@ -6,7 +6,7 @@ project_name = "visionmetric"
 environment  = "production"
 
 # EKS — keep node count at 2 to cap EC2 costs
-eks_cluster_version = "1.28"
+eks_cluster_version = "1.27"
 node_instance_type  = "t3.medium"
 node_desired_count  = 2
 node_min_count      = 1
