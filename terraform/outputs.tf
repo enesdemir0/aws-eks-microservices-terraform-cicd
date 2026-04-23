@@ -49,3 +49,11 @@ output "nat_gateway_ip" {
   description = "NAT Gateway Elastic IP — whitelist this in external services"
   value       = module.vpc.nat_gateway_ip
 }
+
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+
+output "alb_controller_role_arn" {
+  value = module.eks.alb_controller_role_arn
+}
