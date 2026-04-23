@@ -99,7 +99,7 @@ jobs:
             --set serviceAccount.create=true \
             --set serviceAccount.name=aws-load-balancer-controller \
             --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=${{ secrets.ALB_CONTROLLER_ROLE_ARN }} \
-            --wait --timeout=3m
+            --wait --timeout=10m
 
       # ── Secrets (never logged, created fresh each deploy) ─────────────────
       - name: Create / refresh Kubernetes secrets
