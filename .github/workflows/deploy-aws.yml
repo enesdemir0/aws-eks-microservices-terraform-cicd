@@ -1,0 +1,272 @@
+name: Deploy to AWS EKS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION:   eu-central-1
+  EKS_CLUSTER:  visionmetric-eks
+  K8S_NS:       visionmetric
+
+jobs:
+  # ── 1. Build & Push Images to ECR ─────────────────────────────────────────
+  build:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.tag.outputs.tag }}
+      ecr-registry: ${{ steps.login-ecr.outputs.registry }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: echo "tag=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push all service images
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          TAG:      ${{ steps.tag.outputs.tag }}
+        run: |
+          declare -A SERVICES=(
+            ["auth-service"]="./services/auth-service"
+            ["gateway"]="./services/gateaway"
+            ["ai-worker"]="./services/ai-worker"
+            ["metadata-api"]="./services/metadata-api"
+            ["frontend"]="./services/frontend"
+          )
+
+          for svc in "${!SERVICES[@]}"; do
+            ctx="${SERVICES[$svc]}"
+            if [ -f "$ctx/Dockerfile" ]; then
+              echo "Building $svc..."
+              docker build -t "$REGISTRY/$svc:$TAG" -t "$REGISTRY/$svc:latest" "$ctx"
+              docker push "$REGISTRY/$svc:$TAG"
+              docker push "$REGISTRY/$svc:latest"
+            else
+              echo "⚠️  No Dockerfile for $svc — skipping"
+            fi
+          done
+
+  # ── 2. Deploy to EKS ───────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name   ${{ env.EKS_CLUSTER }}
+
+      # ── Namespace + Shared Config ──────────────────────────────────────────
+      - name: Create namespace
+        run: kubectl create namespace ${{ env.K8S_NS }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Install AWS Load Balancer Controller
+        run: |
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName=${{ env.EKS_CLUSTER }} \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=${{ secrets.ALB_CONTROLLER_ROLE_ARN }} \
+            --wait --timeout=3m
+
+      # ── Secrets (never logged, created fresh each deploy) ─────────────────
+      - name: Create / refresh Kubernetes secrets
+        env:
+          RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
+          DB_USERNAME:  ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD:  ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET:   ${{ secrets.JWT_SECRET }}
+        run: |
+          # Auth secrets
+          kubectl create secret generic auth-secrets \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+            --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          # Metadata secrets
+          kubectl create secret generic metadata-secrets \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # ── Service Account + IRSA annotation ────────────────────────────────
+      - name: Annotate IRSA service account
+        run: |
+          kubectl create serviceaccount visionmetric-worker \
+            --namespace=${{ env.K8S_NS }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl annotate serviceaccount visionmetric-worker \
+            --namespace=${{ env.K8S_NS }} \
+            --overwrite \
+            eks.amazonaws.com/role-arn=${{ secrets.IRSA_ROLE_ARN }}
+
+      # ── EKS ConfigMaps (override Kind defaults with AWS values) ───────────
+      - name: Apply AWS ConfigMaps
+        env:
+          RDS_ENDPOINT:  ${{ secrets.RDS_ENDPOINT }}
+          DB_USERNAME:   ${{ secrets.DB_USERNAME }}
+          S3_BUCKET:     ${{ secrets.S3_BUCKET }}
+        run: |
+          kubectl create configmap auth-config \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=DB_USER="$DB_USERNAME" \
+            --from-literal=DB_NAME="auth_db" \
+            --from-literal=DB_HOST="$RDS_ENDPOINT" \
+            --from-literal=NODE_ENV="production" \
+            --from-literal=PORT="3000" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create configmap gateway-config \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=PORT="8000" \
+            --from-literal=NODE_ENV="production" \
+            --from-literal=AUTH_SERVICE_URL="http://auth-service:3000" \
+            --from-literal=REDIS_URL="redis://redis-service:6379/0" \
+            --from-literal=STORAGE_TYPE="s3" \
+            --from-literal=UPLOAD_DIR="/app/uploads" \
+            --from-literal=AWS_S3_BUCKET="$S3_BUCKET" \
+            --from-literal=AWS_REGION="${{ env.AWS_REGION }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create configmap ai-worker-config \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=REDIS_URL="redis://redis-service:6379/0" \
+            --from-literal=TASK_QUEUE="image_tasks" \
+            --from-literal=METADATA_API_URL="http://metadata-api-service:8001/api/metadata/save" \
+            --from-literal=STORAGE_TYPE="s3" \
+            --from-literal=AWS_S3_BUCKET="$S3_BUCKET" \
+            --from-literal=AWS_REGION="${{ env.AWS_REGION }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create configmap metadata-config \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=DB_USER="$DB_USERNAME" \
+            --from-literal=DB_NAME="metadata_db" \
+            --from-literal=DB_HOST="$RDS_ENDPOINT" \
+            --from-literal=PORT="8001" \
+            --from-literal=APP_ENV="production" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create configmap auth-db-init \
+            --namespace=${{ env.K8S_NS }} \
+            --from-literal=init.sql="" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # ── Initialise metadata_db on first deploy ────────────────────────────
+      - name: Create metadata_db on RDS (idempotent)
+        env:
+          RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
+          DB_USERNAME:  ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD:  ${{ secrets.DB_PASSWORD }}
+        run: |
+          kubectl run db-init --restart=Never \
+            --namespace=${{ env.K8S_NS }} \
+            --image=postgres:15-alpine \
+            --env="PGPASSWORD=$DB_PASSWORD" \
+            --command -- sh -c \
+            "psql -h $RDS_ENDPOINT -U $DB_USERNAME -d auth_db -tc \
+             \"SELECT 1 FROM pg_database WHERE datname='metadata_db'\" \
+             | grep -q 1 || \
+             psql -h $RDS_ENDPOINT -U $DB_USERNAME -d auth_db \
+             -c 'CREATE DATABASE metadata_db'" || true
+          kubectl delete pod db-init --namespace=${{ env.K8S_NS }} --ignore-not-found=true
+
+      # ── Apply Manifests (skip local-only DB manifests) ─────────────────────
+      - name: Deploy application manifests
+        env:
+          REGISTRY: ${{ needs.build.outputs.ecr-registry }}
+          TAG:      ${{ needs.build.outputs.image-tag }}
+          NS:       ${{ env.K8S_NS }}
+        run: |
+          # Patch image names in manifests with ECR URLs before applying
+          SED_CMDS=(
+            "s|image: auth-service:latest|image: $REGISTRY/auth-service:$TAG|g"
+            "s|image: gateway-service:latest|image: $REGISTRY/gateway:$TAG|g"
+            "s|image: ai-worker:latest|image: $REGISTRY/ai-worker:$TAG|g"
+            "s|image: metadata-api:latest|image: $REGISTRY/metadata-api:$TAG|g"
+            "s|image: frontend:latest|image: $REGISTRY/frontend:$TAG|g"
+            "s|imagePullPolicy: IfNotPresent|imagePullPolicy: Always|g"
+          )
+
+          apply_patched() {
+            local file="$1"
+            local tmp=$(mktemp)
+            cp "$file" "$tmp"
+            for cmd in "${SED_CMDS[@]}"; do
+              sed -i "$cmd" "$tmp"
+            done
+            kubectl apply -f "$tmp" --namespace="$NS"
+            rm "$tmp"
+          }
+
+          # Redis (runs in-cluster in both Kind and EKS)
+          kubectl apply -f k8s/shared/redis.yaml --namespace="$NS"
+
+          # Application services (skip local postgres — using RDS)
+          for dir in k8s/auth k8s/gateway k8s/ai-worker k8s/metadata-api k8s/frontend; do
+            for f in "$dir"/*.yaml; do
+              # Skip local-only DB deployment files
+              [[ "$f" == *"auth-db-deployment"* ]] && continue
+              [[ "$f" == *"auth-db-pvc"* ]]        && continue
+              [[ "$f" == *"auth-db-service"* ]]     && continue
+              [[ "$f" == *"db.yaml"* ]]             && continue
+              apply_patched "$f"
+            done
+          done
+
+          # ALB Ingress (AWS-specific — replaces NGINX ingress used in Kind)
+          kubectl apply -f k8s/ingress-alb.yaml --namespace="$NS"
+
+      # ── Wait for Rollout ──────────────────────────────────────────────────
+      - name: Wait for deployments to roll out
+        run: |
+          for dep in auth-deployment gateway-deployment metadata-deployment frontend-deployment ai-worker-deployment; do
+            echo "Waiting for $dep..."
+            kubectl rollout status deployment/$dep \
+              --namespace=${{ env.K8S_NS }} \
+              --timeout=300s || true
+          done
+
+      # ── Print ALB URL ──────────────────────────────────────────────────────
+      - name: Print application URL
+        run: |
+          echo "⏳ Waiting for ALB to provision..."
+          sleep 30
+          kubectl get ingress microservices-ingress \
+            --namespace=${{ env.K8S_NS }} \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+          | xargs -I{} echo "✅ Application URL: http://{}"

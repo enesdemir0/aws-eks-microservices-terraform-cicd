@@ -18,7 +18,14 @@ venv/
 *.tfstate
 *.tfstate.backup
 terraform/terraform.tfvars
-
+terraform/tfplan
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+tfplan           # <--- Add this!
+.terraform.tfstate.lock.info
 uploads
 
 # OS files
