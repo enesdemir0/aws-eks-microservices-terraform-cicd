@@ -24,9 +24,9 @@ log_level: WARNING
 
 # EKS-specific settings
 aws:
-  region: us-east-1
+  region: eu-central-1
   s3_bucket: "${S3_UPLOADS_BUCKET}"
-  ecr_registry: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+  ecr_registry: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-central-1.amazonaws.com"
 
 # Storage switches from local volume to S3 in EKS
 gateway:
