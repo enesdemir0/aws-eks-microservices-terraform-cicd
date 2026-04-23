@@ -12,10 +12,14 @@ spec:
       labels:
         app: ai-worker
     spec:
+      # visionmetric-worker SA is annotated with the IRSA role ARN in EKS.
+      # In Kind (local) the SA exists but has no IRSA — STORAGE_TYPE=local so
+      # boto3 is never called and no AWS credentials are needed.
+      serviceAccountName: visionmetric-worker
       containers:
       - name: ai-brain
-        image: enesdemir09/vision-ai-worker:v1
-        imagePullPolicy: Always
+        image: ai-worker:latest
+        imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:
             name: ai-worker-config
@@ -23,8 +27,6 @@ spec:
         - name: image-storage
           mountPath: /app/uploads
         resources:
-          # AI Worker gets the most resources — TensorFlow needs headroom.
-          # Limits prevent it from OOM-killing other pods on the same node.
           requests:
             cpu: "500m"
             memory: "1Gi"

@@ -12,6 +12,7 @@ spec:
       labels:
         app: gateway-service
     spec:
+      serviceAccountName: visionmetric-worker
       containers:
       - name: gateway-api
         image: gateway-service:latest

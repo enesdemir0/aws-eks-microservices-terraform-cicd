@@ -3,6 +3,11 @@ kind: ConfigMap
 metadata:
   name: ai-worker-config
 data:
-  REDIS_URL: "redis://redis-service:6379/0"
-  TASK_QUEUE: "image_tasks"
+  REDIS_URL:        "redis://redis-service:6379/0"
+  TASK_QUEUE:       "image_tasks"
   METADATA_API_URL: "http://metadata-api-service:8001/api/metadata/save"
+  # Storage — "local" for Kind/Docker Compose, "s3" in EKS.
+  # deploy-aws.yml patches this value and sets AWS_S3_BUCKET before deploying.
+  STORAGE_TYPE:   "local"
+  AWS_S3_BUCKET:  ""
+  AWS_REGION:     "eu-central-1"

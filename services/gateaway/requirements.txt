@@ -5,6 +5,7 @@ httpx
 pydantic-settings
 redis[asyncio]
 aiofiles
+# S3 support — only used when STORAGE_TYPE=s3 (EKS deployment)
+aioboto3
 pytest
 pytest-asyncio
-httpx

@@ -3,9 +3,21 @@ kind: ConfigMap
 metadata:
   name: auth-config
 data:
-  DB_USER: "postgres"
-  DB_NAME: "auth_db"
+  DB_USER:  "postgres"
+  DB_NAME:  "auth_db"
   NODE_ENV: "development"
-  PORT: "3000"
-  # In K8s, the "Host" is the name of the Service we will create for the DB
-  DB_HOST: "auth-db-service"
+  PORT:     "3000"
+  DB_HOST:  "auth-db-service"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-db-init
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+        id           SERIAL PRIMARY KEY,
+        username     VARCHAR(50) UNIQUE NOT NULL,
+        password     TEXT NOT NULL,
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );

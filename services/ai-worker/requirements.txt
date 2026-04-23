@@ -1,10 +1,10 @@
-# --- System Core ---
+# --- Core ---
 tensorflow-cpu==2.15.0
 redis
 pydantic-settings
 pillow
 
-# --- Your ML Logic Dependencies ---
+# --- ML Dependencies ---
 httpx
 numpy<2.0.0
 opencv-python-headless
@@ -13,3 +13,6 @@ pyyaml
 h5py
 rouge-score
 pandas
+
+# --- AWS S3 (used when STORAGE_TYPE=s3, EKS deployment) ---
+boto3

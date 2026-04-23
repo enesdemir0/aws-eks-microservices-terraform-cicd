@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 10
     ALLOWED_EXTENSIONS: str = "jpg,jpeg,png,webp"
     AWS_S3_BUCKET: Optional[str] = None
+    AWS_REGION: str = "us-east-1"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

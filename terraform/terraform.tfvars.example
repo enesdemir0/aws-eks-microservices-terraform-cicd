@@ -1,7 +1,7 @@
 # Copy this file to terraform.tfvars and fill in real values.
 # NEVER commit terraform.tfvars — it contains secrets.
 
-aws_region   = "us-east-1"
+aws_region   = "eu-central-1"
 project_name = "visionmetric"
 environment  = "production"
 
