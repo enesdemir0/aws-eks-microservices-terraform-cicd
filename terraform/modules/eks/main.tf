@@ -123,10 +123,9 @@ resource "aws_eks_node_group" "main" {
   subnet_ids      = var.private_subnet_ids
   instance_types  = [var.node_instance_type]
 
-  # ── THE FIXES ──
-  # Force standard Amazon Linux 2 (Most stable)
-  ami_type       = "AL2_x86_64" 
-  # Ensure we use regular instances (not Spot) to avoid interruptions
+  # ── THE ULTIMATE FIX ──
+  # Use Amazon Linux 2023 (Standard) - Required for EKS 1.29+
+  ami_type       = "AL2023_x86_64_STANDARD" 
   capacity_type  = "ON_DEMAND"
 
   scaling_config {
@@ -150,6 +149,7 @@ resource "aws_eks_node_group" "main" {
     "k8s.io/cluster-autoscaler/${var.project_name}-eks"         = "owned"
   }
 }
+
 # ── OIDC Provider (required for IRSA) ────────────────────────────────────────
 
 data "tls_certificate" "eks" {
